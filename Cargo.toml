@@ -1,7 +1,9 @@
 [package]
+authors = ["Geordon Worley <vadixidav@gmail.com>"]
 name = "uarc-emu"
 version = "0.1.0"
-authors = ["Geordon Worley <vadixidav@gmail.com>"]
 
 [dependencies]
 futures = "0.1"
+num = "0.1"
+tokio-io = "0.1"

@@ -12,6 +12,7 @@ use num::PrimInt;
 
 /// Contains the permission level of a core. Only used for
 /// hardware security and control, not priority handling or optimization.
+#[derive(Default, Debug, Clone)]
 pub struct Permission<Word> {
     /// Specifies the mask of the network this core has permission over.
     pub ownership: Word,
@@ -19,6 +20,7 @@ pub struct Permission<Word> {
     pub network: Word,
 }
 
+#[derive(Default, Debug)]
 pub struct InBus<'a, Word> {
     pub inceptions: Vec<Receiver<Permission<Word>>>,
     pub kills: Vec<Receiver<Permission<Word>>>,
@@ -26,6 +28,7 @@ pub struct InBus<'a, Word> {
     pub streams: Vec<Receiver<ReadHalf<Cursor<&'a mut [u8]>>>>,
 }
 
+#[derive(Default, Debug)]
 pub struct OutBus<'a, Word> {
     pub inceptions: Vec<Sender<Permission<Word>>>,
     pub kills: Vec<Sender<Permission<Word>>>,

@@ -2,17 +2,17 @@ extern crate futures;
 extern crate tokio_io as tio;
 extern crate num;
 
-use futures::Stream;
+use futures::{Stream, Async};
 use futures::sync::mpsc::{Receiver, Sender};
 use std::io::Cursor;
-use tio::{AsyncRead, AsyncWrite};
 use tio::io::{ReadHalf, WriteHalf};
 
 use num::PrimInt;
+use num::cast::NumCast;
 
 /// Contains the permission level of a core. Only used for
 /// hardware security and control, not priority handling or optimization.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, Copy)]
 pub struct Permission<Word> {
     /// Specifies the mask of the network this core has permission over.
     pub ownership: Word,
@@ -36,11 +36,14 @@ pub struct OutBus<'a, Word> {
     pub streams: Vec<Sender<WriteHalf<Cursor<&'a mut [u8]>>>>,
 }
 
+/// An implementer of this trait is UARC compatible and can connect to other cores over the simulated bus.
 pub trait Uarc {
     type Word: PrimInt;
 
     /// Operate the core to completion in a blocking manner.
     fn operate<'a>(&'a mut self, input: InBus<'a, Self::Word>, output: OutBus<'a, Self::Word>);
+
+    // TODO: Add method to do a single cycle.
 
     /// Get the permission of this UARC core.
     fn permission(&self) -> Permission<Self::Word>;
@@ -49,6 +52,18 @@ pub trait Uarc {
     fn permit(&self, perm: Permission<Self::Word>) -> bool {
         let self_perm = self.permission();
         self_perm.ownership & self_perm.network == self_perm.ownership & perm.network
+    }
+
+    /// Look for an oncoming inception and give an `Option` of its bus ID.
+    fn poll_inception<'a>(&'a self, input: &mut InBus<'a, Self::Word>) -> Option<(Self::Word, Permission<Self::Word>)> {
+        for (ix, channel) in input.inceptions.iter_mut().enumerate() {
+            if let Ok(Async::Ready(Some(perm))) = channel.poll() {
+                if self.permit(perm) {
+                    return Some((NumCast::from(ix).expect("Error: Unable to convert bus ID into word!"), perm));
+                }
+            }
+        }
+        None
     }
 }
 

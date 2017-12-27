@@ -6,4 +6,3 @@ version = "0.1.0"
 [dependencies]
 futures = "0.1"
 num = "0.1"
-tokio-io = "0.1"

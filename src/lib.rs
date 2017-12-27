@@ -1,59 +1,47 @@
 extern crate futures;
-extern crate tokio_io as tio;
 extern crate num;
 
-mod echo;
-pub use echo::EchoCore;
-
-use futures::{Stream, Sink, Future};
-use futures::sync::mpsc::{Receiver, Sender};
-use std::io::Cursor;
-use tio::io::{ReadHalf, WriteHalf};
-
 use num::PrimInt;
-use num::cast::NumCast;
+use futures::{Sink, Future};
+use futures::sync::mpsc::*;
 
-/// Contains the permission level of a core. Only used for
-/// hardware security and control, not priority handling or optimization.
-#[derive(Default, Debug, Clone, Copy)]
-pub struct Permission<Word> {
-    /// Specifies the mask of the network this core has permission over.
-    pub ownership: Word,
-    /// Specifies the specific address of this core. Addresses are not necessarily unique.
-    pub network: Word,
-}
-
-impl<Word> Permission<Word> where Word: PrimInt {
-    pub fn has_privilege(&self, other: Self) -> bool {
-        self.ownership & self.network == self.ownership & other.network
-    }
-}
-
-#[derive(Debug, Clone)]
-pub enum Data<S> {
-    Incept,
-    Kill,
-    Message,
-    Stream(S),
-}
-
-/// `Word` is the bus word for this implementation. `Stream` is the stream used to stream data words.
-#[derive(Debug, Clone)]
-pub struct Transport<Word, Stream> {
-    /// The ID of the bus.
-    pub bus: Word,
-    /// The permission of the sender.
-    pub permission: Permission<Word>,
-    /// The actual data sent.
-    pub data: Data<Stream>,
+#[derive(Debug)]
+pub enum Data<W> {
+    Msg(W),
+    Stream(Receiver<W>),
 }
 
 /// An implementer of this trait is UARC compatible and can connect to other cores over the simulated bus.
 pub trait Uarc {
     type Word: PrimInt;
-    type Sink: Sink<SinkItem=Self::Word>;
 
-    /// Obtains a new sink which can send data to this core.
-    fn sink(&self) -> Self::Sink;
+    /// Obtains a new bus which can send data to this core.
+    /// This requires the bus ID to be provided for the receiving core.
+    /// The implementor should panic if two buses are asked for with the same ID.
+    fn make_bus(&self, id: Self::Word) -> Bus<Self::Word>;
+}
+
+/// Wraps a Sender to provide the basic UARC semantics.
+pub struct Bus<W> {
+    sender: Option<Sender<Data<W>>>,
+}
+
+impl<W> Bus<W> {
+    pub fn new(sender: Sender<Data<W>>) -> Bus<W> {
+        Bus { sender: Some(sender) }
+    }
+
+    pub fn msg(&mut self, data: Data<W>) {
+        self.sender = Some(self.sender.take().expect("error: uarc-emu::Bus::sender in invalid state")
+            .send(data).wait().expect("error: uarc-emu::Bus::msg() failed to send word"));
+    }
+
+    pub fn send(&mut self, word: W) {
+        self.msg(Data::Msg(word));
+    }
+
+    pub fn stream(&mut self, receiver: Receiver<W>) {
+        self.msg(Data::Stream(receiver));
+    }
 }
 
